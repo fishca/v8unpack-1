@@ -1,2 +1,4 @@
 twine
 pyinstaller
+tqdm
+build

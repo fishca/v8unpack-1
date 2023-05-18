@@ -1,5 +1,6 @@
 import os
 import shutil
+from datetime import datetime
 
 from . import helper
 from .code_organizer import CodeOrganizer
@@ -10,52 +11,68 @@ class FileOrganizer:
 
     @classmethod
     def unpack(cls, src_dir, dest_dir, *, pool=None, index=None, descent=None):
+        begin = datetime.now()
+        print(f'{"Организуем код":30}')
         tasks = []
         cls._unpack(src_dir, os.path.abspath(dest_dir), '', tasks, index, descent)
-        helper.run_in_pool(cls.unpack_code_file, tasks, pool=pool)
+        helper.run_in_pool(cls.unpack_code_file, tasks, pool=pool, title=f'{"Раскладываем код по файлам":30}')
+        print(f'{"Организуем код - готово":30}: {datetime.now() - begin}')
 
     @classmethod
     def _unpack(cls, src_dir, dest_dir, path, tasks, index, descent=None):
         entries = os.listdir(os.path.join(src_dir, path))
         for entry in entries:
-            src_entry_path = os.path.join(src_dir, path, entry)
+            try:
+                src_entry_path = os.path.join(src_dir, path, entry)
 
-            if os.path.isdir(src_entry_path):
-                new_path = os.path.join(path, entry)
-                cls._unpack(src_dir, dest_dir, new_path, tasks, index, descent)
-                continue
-            if entry[-3:] == '.1c':
-                tasks.append((src_dir, path, entry, dest_dir, index, descent))
-            else:
-                src_path = os.path.join(src_dir, path)
-                cls.unpack_file(src_path, entry, dest_dir, path, entry, index, descent)
+                if os.path.isdir(src_entry_path):
+                    new_path = os.path.join(path, entry)
+                    cls._unpack(src_dir, dest_dir, new_path, tasks, index, descent)
+                    continue
+                if entry[-3:] == '.1c':
+                    tasks.append((src_dir, path, entry, dest_dir, index, descent))
+                else:
+                    src_path = os.path.join(src_dir, path)
+                    cls.unpack_file(src_path, entry, dest_dir, path, entry, index, descent)
+            except Exception as err:
+                raise ExtException(
+                    parent=err,
+                    action=f'{cls.__name__}._unpack {path}.{entry}'
+                ) from err
 
     @classmethod
     def unpack_file(cls, src_path, src_file_name, dest_dir, dest_path, dest_file_name, index, descent=None):
-        dest_entry_path, dest_file_name = CodeOrganizer.get_dest_path(dest_dir, dest_path, dest_file_name, index,
-                                                                      descent)
-        dest_full_path = os.path.abspath(os.path.join(dest_dir, dest_entry_path))
+        try:
+            dest_entry_path, dest_file_name = CodeOrganizer.get_dest_path(dest_dir, dest_path, dest_file_name, index,
+                                                                          descent)
+            dest_full_path = os.path.abspath(os.path.join(dest_dir, dest_entry_path))
 
-        if dest_entry_path:
-            os.makedirs(dest_full_path, exist_ok=True)
+            if dest_entry_path:
+                helper.makedirs(dest_full_path, exist_ok=True)
 
-        src_full_path = os.path.join(src_path, src_file_name)
+            src_full_path = os.path.join(src_path, src_file_name)
 
-        if dest_full_path.startswith(dest_dir):  # файлы вне папки исходников не версионируются
-            descent_full_dest_path, descent_file_name = cls.unpack_get_descent_filename(src_path, src_file_name, None,
-                                                                                        dest_full_path, dest_file_name,
-                                                                                        descent,
-                                                                                        cls.equal_binary_file)
-        else:
-            descent_full_dest_path, descent_file_name = os.path.join(dest_dir, dest_entry_path), dest_file_name
+            # файлы вне папки исходников не версионируются
+            if dest_full_path.startswith(dest_dir) or os.path.normcase(dest_entry_path).find('\\src\\') >= 0:
+                descent_full_dest_path, descent_file_name = cls.unpack_get_descent_filename(src_path, src_file_name,
+                                                                                            None,
+                                                                                            dest_full_path,
+                                                                                            dest_file_name,
+                                                                                            descent,
+                                                                                            cls.equal_binary_file)
+            else:
+                descent_full_dest_path, descent_file_name = os.path.join(dest_dir, dest_entry_path), dest_file_name
 
-        if descent_file_name:
-            shutil.copy(src_full_path, os.path.join(descent_full_dest_path, descent_file_name))
+            if descent_file_name:
+                shutil.copy(src_full_path, os.path.join(descent_full_dest_path, descent_file_name))
+        except Exception as err:
+            raise ExtException(parent=err, action=f'{cls.__name__}.unpack_file {src_file_name}') from err
 
     @classmethod
-    def unpack_code_file(cls, src_dir, path, file_name, dest_dir, index, descent=None):
+    def unpack_code_file(cls, params):
+        src_dir, path, file_name, dest_dir, index, descent = params
         try:
-            code_areas = CodeOrganizer.unpack(src_dir, path, file_name, dest_dir, index)
+            code_areas = CodeOrganizer.unpack(params)
             for elem in code_areas:
                 _file = code_areas[elem]
                 if elem == 'root':
@@ -73,7 +90,6 @@ class FileOrganizer:
                     descent_full_dest_path, descent_file_name = _file['dest_path'], _file['file_name']
 
                 if descent_file_name:
-                    os.makedirs(descent_full_dest_path, exist_ok=True)
                     helper.txt_write(_file['data'], descent_full_dest_path, descent_file_name)
         except Exception as err:
             raise ExtException(
@@ -106,59 +122,73 @@ class FileOrganizer:
 
     @classmethod
     def pack(cls, src_dir, dest_dir, *, pool=None, index=None, descent=None):
-        helper.clear_dir(dest_dir)
-        tasks = []
-        src_dir = os.path.abspath(src_dir)
-        index_code_areas = index.get('Области include') if index else None
-        if index:
-            cls._pack_index(src_dir, dest_dir, tasks, index, index_code_areas, [''], descent)
-        cls._pack(src_dir, dest_dir, '', tasks, index, index_code_areas, descent)
-        helper.run_in_pool(CodeOrganizer.pack, tasks, pool=pool)
+        begin = datetime.now()
+        print(f'{"Собираем код":30}')
+        try:
+            helper.clear_dir(dest_dir)
+            tasks = []
+            src_dir = os.path.abspath(src_dir)
+            index_code_areas = index.get('Области include') if index else None
+            if index:
+                cls._pack_index(src_dir, dest_dir, tasks, index, index_code_areas, [''], descent)
+            cls._pack(src_dir, dest_dir, '', tasks, index, index_code_areas, descent)
+            helper.run_in_pool(CodeOrganizer.pack, tasks, pool=pool, title=f'{"Собираем код из файлов":30}')
+        except Exception as err:
+            raise ExtException(parent=err)
+        print(f'{"Собираем код - готово":30}: {datetime.now() - begin}')
 
     @classmethod
     def _pack_index(cls, src_dir: str, dest_dir: str, tasks: list, index: dict, index_code_areas: dict, path: list,
                     descent=None):
         for entry in index:
-            if entry == 'Области include':
-                continue
-            if not index[entry]:
-                continue
-            if isinstance(index[entry], dict):
-                path.append(entry)
-                cls._pack_index(src_dir, dest_dir, tasks, index[entry], index_code_areas, path, descent)
-                path.pop()
-                pass
-            elif isinstance(index[entry], str):
-                if entry[-3:] == '.1c':
-                    _src_path = os.path.join(
-                        '..',
-                        '' if descent is None else '..',  # в режиме с descent корень находится на уровень выше
-                        os.path.dirname(index[entry])
-                    )
-                    _dest_path = os.path.join(*path)
+            try:
+                if entry == 'Области include':
+                    continue
+                if not index[entry]:
+                    continue
+                if isinstance(index[entry], dict):
+                    path.append(entry)
+                    cls._pack_index(src_dir, dest_dir, tasks, index[entry], index_code_areas, path, descent)
+                    path.pop()
+                    pass
+                elif isinstance(index[entry], str):
+                    if entry[-3:] == '.1c':
+                        _src_path = os.path.join(
+                            '..',
+                            '' if descent is None else '..',  # в режиме с descent корень находится на уровень выше
+                            os.path.dirname(index[entry])
+                        )
+                        _dest_path = os.path.join(*path)
 
-                    _src_abs_path = os.path.abspath(_src_path)
-                    if _src_abs_path.startswith(src_dir):
-                        func_descent_filename = cls.pack_get_descent_filename
+                        _src_abs_path = os.path.abspath(_src_path)
+                        if _src_abs_path.startswith(src_dir):
+                            func_descent_filename = cls.pack_get_descent_filename
+                        else:
+                            func_descent_filename = FileOrganizer.pack_get_descent_filename
+                        tasks.append((
+                            src_dir, _src_path, os.path.basename(index[entry]),
+                            dest_dir, _dest_path, entry, index_code_areas,
+                            descent, func_descent_filename))
                     else:
-                        func_descent_filename = FileOrganizer.pack_get_descent_filename
-                    tasks.append((
-                        src_dir, _src_path, os.path.basename(index[entry]),
-                        dest_dir, _dest_path, entry, index_code_areas,
-                        descent, func_descent_filename))
+                        _dest_path = os.path.join(dest_dir, *path)
+                        _src_path = os.path.join(
+                            '..',
+                            '' if descent is None else '..',  # в режиме с descent корень находится на уровень выше
+                            index[entry]
+                        )
+                        _src_full_path = os.path.join(
+                            src_dir,
+                            _src_path
+                        )
+                        _src_path = os.path.dirname(_src_full_path)
+                        _src_file_name = os.path.basename(_src_full_path)
+                        if os.path.normcase(_src_path).find('\\src\\') >= 0:
+                            _src_path, _src_file_name = cls.pack_get_descent_filename(_src_path, _src_file_name, descent)
+                        cls._pack_file(_src_path, _src_file_name, _dest_path, entry, descent)
                 else:
-                    _dest_path = os.path.join(dest_dir, *path)
-                    _src_full_path = os.path.join(
-                        src_dir,
-                        '..',
-                        '' if descent is None else '..',  # в режиме с descent корень находится на уровень выше
-                        index[entry]
-                    )
-                    _src_path = os.path.dirname(_src_full_path)
-                    _src_file_name = os.path.basename(_src_full_path)
-                    cls._pack_file(_src_path, _src_file_name, _dest_path, entry, descent)
-            else:
-                raise Exception('Некорректный формат файла индекса')
+                    raise Exception('Некорректный формат файла индекса')
+            except Exception as err:
+                raise ExtException(parent=err)
 
     @classmethod
     def pack_get_descent_filename(cls, src_path, src_file_name, descent):
@@ -171,7 +201,7 @@ class FileOrganizer:
     @classmethod
     def _pack(cls, src_dir, dest_dir, path, tasks, index, index_code_areas, descent=None):
         if path:
-            os.makedirs(os.path.join(dest_dir, path), exist_ok=True)
+            helper.makedirs(os.path.join(dest_dir, path), exist_ok=True)
         entries = cls.list_descent_dir(src_dir, path, descent)
         for entry in entries:
             try:
@@ -203,5 +233,5 @@ class FileOrganizer:
             shutil.copy(_src_path, _dest_path)
         except FileNotFoundError:
             _dest_dir = os.path.dirname(_dest_path)
-            os.makedirs(_dest_dir, exist_ok=True)
+            helper.makedirs(_dest_dir, exist_ok=True)
             shutil.copy(_src_path, _dest_path)

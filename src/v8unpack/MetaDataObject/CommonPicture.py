@@ -9,22 +9,24 @@ from ..ext_exception import ExtException
 class CommonPicture(Simple):
     def __init__(self):
         super(Simple, self).__init__()
+        self.ext_code = {}
         self.data = None
         self.raw_data = None
 
     def decode_object(self, src_dir, file_name, dest_dir, dest_path, version, header_data):
         try:
-            super(CommonPicture, self).decode_object(src_dir, file_name, dest_dir, dest_path, version, header_data)
+            super().decode_object(src_dir, file_name, dest_dir, dest_path, version, header_data)
             try:
-                self.raw_data = helper.json_read(src_dir, f'{self.header["uuid"]}.0.json')
+                self.header['info'] = helper.brace_file_read(src_dir, f'{self.header["uuid"]}.0')
             except FileNotFoundError:
                 return
-            if self.raw_data[0][2] and self.raw_data[0][2][0][0]:
-                self.data = b64decode(self.raw_data[0][2][0][0][8:])
+            if self.header['info'][0][2] and self.header['info'][0][2][0] and self.header['info'][0][2][0][0]:
+                bin_data = self._extract_b64_data(self.header['info'][0][2][0])
+
                 extension = helper.get_extension_from_comment(self.header['comment'])
                 _dest_dir = os.path.join(dest_dir, dest_path)
                 if dest_dir:
-                    helper.bin_write(self.data, _dest_dir, f'{self.header["name"]}.{extension}')
+                    helper.bin_write(bin_data, _dest_dir, f'{self.header["name"]}.{extension}')
         except Exception as err:
             raise ExtException(parent=err)
 
@@ -34,22 +36,9 @@ class CommonPicture(Simple):
         extension = helper.get_extension_from_comment(self.header['comment'])
         try:
             bin_data = helper.bin_read(src_dir, f'{self.header["name"]}.{extension}')
-            self.raw_data = [
-                [
-                    "1",
-                    [
-                        "0",
-                        "0",
-                        "-1",
-                        "-1"
-                    ],
-                    [
-                        [
-                            "#base64:" + b64encode(bin_data).decode(encoding='utf-8')
-                        ]
-                    ]
-                ]
-            ]
-            helper.json_write(self.raw_data, dest_dir, f'{self.header["uuid"]}.0.json')
+            self.header['info'][0][2][0][0] += b64encode(bin_data).decode(encoding='utf-8')
+            file_name = f'{self.header["uuid"]}.0'
+            helper.brace_file_write(self.header['info'], dest_dir, file_name)
+            self.file_list.append(file_name)
         except FileNotFoundError:
             pass

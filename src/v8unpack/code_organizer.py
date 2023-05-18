@@ -11,11 +11,8 @@ class CodeOrganizer:
         self.data = None
 
     @classmethod
-    def unpack_mp(cls, params):
-        return cls.unpack(*params)
-
-    @classmethod
-    def unpack(cls, src_dir, path, file_name, dest_dir, index):
+    def unpack(cls, params):
+        src_dir, path, file_name, dest_dir, index, descent = params
         self = cls()
         self.code_areas = {'root': dict(data='')}
         _path = ['']
@@ -55,12 +52,9 @@ class CodeOrganizer:
         return self.code_areas
 
     @classmethod
-    def pack_mp(cls, params):
-        return cls.pack(*params)
-
-    @classmethod
-    def pack(cls, src_dir, src_path, src_file_name, dest_dir, dest_path, dest_file_name, index_code_areas, descent,
-             pack_get_descent_filename):
+    def pack(cls, params):
+        src_dir, src_path, src_file_name, dest_dir, dest_path, dest_file_name, index_code_areas, \
+        descent, pack_get_descent_filename = params
         data = cls.pack_file(src_dir, src_path, src_file_name, index_code_areas, descent, pack_get_descent_filename)
         helper.txt_write(data, os.path.join(dest_dir, dest_path), dest_file_name)
 
@@ -85,8 +79,15 @@ class CodeOrganizer:
                                                   pack_get_descent_filename)
                     line = file.readline()
                 return data
+        except ExtException as err:
+            raise ExtException(
+                parent=err,
+                action=f'{cls.__name__}.pack_file {file_name}') from err
         except Exception as err:
-            raise ExtException(parent=err, action=f'{cls.__name__}.pack_file', detail=f'{path} {file_name}')
+            raise ExtException(
+                parent=err,
+                action=f'{cls.__name__}.pack_file {file_name}',
+                message='Ошибка упаковки файла', detail=f'{os.path.join(path, file_name)}: {err}') from err
 
     @staticmethod
     def parse_include_path(include_path, path, file_name, index_code_areas, descent):
@@ -98,7 +99,7 @@ class CodeOrganizer:
             raise Exception(f'{path} {file_name} в include не указан путь')
         _file_name = f'{tmp[-1]}.1c'
         _path = '..'  # include не должен лежать внутри папки с исходниками
-        if descent:
+        if descent is not None:
             _path = os.path.join(_path, '..')
         if size_tmp > 1:
             tmp = ['..' if elem == '' else elem for elem in tmp[:-1]]
@@ -107,25 +108,33 @@ class CodeOrganizer:
 
     @staticmethod
     def get_dest_path(dest_dir: str, path: str, file_name: str, index: dict, descent: int):
-        if index:
-            try:
-                _res = get_from_index(index, path, file_name)
-            except KeyError:
-                _res = None
-
-            if _res:
-                _path = os.path.dirname(_res)
-                _file = os.path.basename(_res)
-                _path = os.path.join(
-                    '..',
-                    '' if descent is None else '..',  # в режиме с descent корень находится на уровень выше
-                    _path
-                )
-
+        try:
+            if index:
                 try:
-                    os.makedirs(os.path.join(dest_dir, _path), exist_ok=True)
-                except FileExistsError:
-                    pass
-                return _path, _file
+                    _res = get_from_index(index, path, file_name)
+                except KeyError:
+                    _res = None
 
-        return path, file_name
+                if _res:
+                    _path = os.path.dirname(_res)
+                    _file = os.path.basename(_res)
+                    _path = os.path.join(
+                        '..',
+                        '' if descent is None else '..',  # в режиме с descent корень находится на уровень выше
+                        _path
+                    )
+
+                    try:
+                        helper.makedirs(os.path.join(dest_dir, _path), exist_ok=True)
+                    except FileExistsError:
+                        pass
+                    return _path, _file
+
+            return path, file_name
+        except Exception as err:
+            raise ExtException(
+                parent=err,
+                message='Ошибка получения пути из index.json',
+                detail=f'{path}\{file_name}',
+                action='CodeOrganizer.get_dest_path',
+            ) from err

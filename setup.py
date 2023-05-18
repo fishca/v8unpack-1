@@ -1,5 +1,10 @@
+import sys
+
 import setuptools
-from src.v8unpack import __version__
+
+sys.path[0:0] = ['src\\v8unpack']
+
+from version import __version__
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -7,7 +12,6 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setuptools.setup(
     name='v8unpack',
     version=__version__,
-    test_requires=[],
     url='https://github.com/saby-integration/v8unpack',
     license='MIT',
     author='Razgovorov Mikhail',
@@ -24,12 +28,13 @@ setuptools.setup(
         "Operating System :: OS Independent"
     ],
     keywords='1C CF CFE EPF V8UNPACK SABY SBIS СБИС 1С',
-    python_requires='>=3.3',
+    python_requires='>=3.7',
     zip_safe=False,
-    install_requires=[
-    ],
+    packages=setuptools.find_packages(where='src'),
     package_dir={"": "src"},
-    packages=setuptools.find_packages(where="src"),
+    install_requires=[
+        'tqdm>=4'
+    ],
     entry_points={
         'console_scripts':
             [

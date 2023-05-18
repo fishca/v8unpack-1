@@ -3,6 +3,7 @@
 [![img lib ver](https://img.shields.io/pypi/v/v8unpack.svg "")](https://pypi.python.org/pypi/v8unpack)
 [![img python ver](https://img.shields.io/pypi/pyversions/v8unpack.svg "")](https://pypi.python.org/pypi/v8unpack)
 [![img license](https://img.shields.io/pypi/l/v8unpack.svg "")](https://pypi.python.org/pypi/v8unpack)
+[![img coverage](https://img.shields.io/coveralls/saby/v8unpack.svg "")](https://coveralls.io/github/saby/v8unpack)
 
 **v8unpack** - консольная утилита для сборки и распаковки бинарных файлов 
 1С:Предприятие 8.х (cf, cfe, epf) без использования технологической платформы.
@@ -21,9 +22,9 @@
 * Двоичные данные макетов и картинки хранятся в исходном виде
 * При сборке под 8.2 и 8.1. автоматически комментируются директивы 8.3
 * Файлы хранятся в формате json
+* Видны изменения элементов форм
 
 ## Основным назначением утилиты являются:
-
 1.	Автоматическая сборка приложений 1С (расширения конфигураций, внешние обработки) 
 для различных платформ и конфигураций из одних и тех же исходников
 2.	Удобное и человекочитаемое хранение исходников в системах контроля версий.
@@ -38,11 +39,14 @@
 
 ![Алгоритм работы](https://github.com/saby-integration/v8unpack/blob/main/docs/stage.png?raw=true)
 
+
 ## Установка
 
     pip install v8unpack
 
 или [скачайте exe файл](https://github.com/saby-integration/v8unpack/raw/main/exe/v8unpack.exe)
+
+Если работаете с тяжелыми конфигурациями используйте 64-bit питон последних версий.
 
 ## Распаковка файла 1С
 
@@ -82,6 +86,8 @@ if __name__ == '__main__':
 [История изменений](https://github.com/saby-integration/v8unpack/blob/main/docs/history.md)
 
 [Участие](https://github.com/saby-integration/v8unpack/blob/main/docs/develop.md)
+
+## Отладка
 
 ## Ограничения
 

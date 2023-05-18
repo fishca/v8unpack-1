@@ -11,7 +11,10 @@ build/
 dist/
 docs/_build/
 tmp/
+venv/
 temp/
+temp2/
 tests/*/src/
 tests/*/core/
 *.spec
+/tests/metadata/data/
